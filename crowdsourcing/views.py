@@ -7,6 +7,7 @@ from itertools import count
 import logging
 import smtplib
 from xml.dom.minidom import Document
+from collections import defaultdict
 
 from django.conf import settings
 from django.core.exceptions import FieldError
@@ -17,7 +18,7 @@ from django.db.models import Q
 from django.http import HttpResponse, HttpResponseRedirect, Http404
 from django.shortcuts import get_object_or_404, render_to_response
 from django.template import RequestContext as _rc
-from django.utils.html import escape
+from django.utils.html import escape, strip_tags
 
 from .forms import forms_for_survey
 from .models import (
@@ -725,3 +726,42 @@ def submission_for_map(request, id):
     else:
         sub = get_object_or_404(Submission.objects, is_public=True, pk=id)
     return render_to_response(template, dict(submission=sub), _rc(request))
+
+
+def export(request, survey_slug):
+    survey = Survey.objects.get(slug=survey_slug)
+    columns = ['user']
+    answer_check = defaultdict(dict)
+    for question in survey.questions.all():
+        if question.options:
+            i = 0
+            for o in question.options.splitlines():
+                o = strip_tags(o.strip())
+                if not o:
+                    continue
+                i += 1
+                key = '%s_%s' % (question.fieldname, i)
+                columns.append(key)
+                answer_check[question.fieldname][o] = key
+        else:
+            columns.append(question.fieldname)
+
+    response = HttpResponse(mimetype='text/csv')
+    writer = csv.DictWriter(response, columns)
+    writer.writeheader()
+
+    for submission in Submission.objects.filter(survey=survey):
+        row = dict([(k, 'Nein') for k in columns])
+        row['user'] = submission.user.username
+        for answer in submission.answer_set.all().select_related('question'):
+            question = answer.question
+            answer.text_answer = strip_tags(answer.text_answer.strip())
+            if question.options:
+                print answer_check[question.fieldname]
+                if answer.text_answer in answer_check[question.fieldname]:
+                    key = answer_check[question.fieldname][answer.text_answer]
+                    row[key] = 'Ja'
+            else:
+                row[question.fieldname] = answer.text_answer.encode("utf-8")
+        writer.writerow(row)
+    return response

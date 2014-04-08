@@ -12,10 +12,14 @@ from .views import (allowed_actions,
                     submission,
                     submission_for_map,
                     survey_detail,
-                    survey_report)
+                    survey_report,
+                    export)
 
 urlpatterns = patterns(
     "",
+    url(r'^export/(?P<survey_slug>\w+)/$',
+        export, {},
+        name='custom_export'),
     url(r'^submissions/$',
         submissions,
         {"format": "json"},
