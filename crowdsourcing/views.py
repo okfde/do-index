@@ -734,15 +734,19 @@ def export(request, survey_slug):
     answer_check = defaultdict(dict)
     for question in survey.questions.all():
         if question.options:
-            i = 0
-            for o in question.options.splitlines():
-                o = strip_tags(o.strip())
-                if not o:
-                    continue
-                i += 1
-                key = '%s_%s' % (question.fieldname, i)
-                columns.append(key)
-                answer_check[question.fieldname][o] = key
+            q_options = [q.strip() for q in question.options.splitlines() if q.strip()]
+            if q_options == ['Ja', 'Nein'] or q_options == ['Nein', 'Ja']:
+                columns.append(question.fieldname)
+            else:
+                i = 0
+                for o in question.options.splitlines():
+                    o = strip_tags(o.strip())
+                    if not o:
+                        continue
+                    i += 1
+                    key = '%s_%s' % (question.fieldname, i)
+                    columns.append(key)
+                    answer_check[question.fieldname][o] = key
         else:
             columns.append(question.fieldname)
 
@@ -758,9 +762,13 @@ def export(request, survey_slug):
             answer.text_answer = strip_tags(answer.text_answer.strip())
             if question.options:
                 print answer_check[question.fieldname]
-                if answer.text_answer in answer_check[question.fieldname]:
-                    key = answer_check[question.fieldname][answer.text_answer]
-                    row[key] = 'Ja'
+                q_options = [q.strip() for q in question.options.splitlines() if q.strip()]
+                if q_options == ['Ja', 'Nein'] or q_options == ['Nein', 'Ja']:
+                    row[question.fieldname] = answer.text_answer.strip()
+                else:
+                    if answer.text_answer in answer_check[question.fieldname]:
+                        key = answer_check[question.fieldname][answer.text_answer]
+                        row[key] = 'Ja'
             else:
                 row[question.fieldname] = answer.text_answer.encode("utf-8")
         writer.writerow(row)
